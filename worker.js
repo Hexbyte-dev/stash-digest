@@ -83,9 +83,29 @@ console.log(`  SendGrid from: ${process.env.SENDGRID_FROM_EMAIL}`);
 //
 // Think of it like a clock that ticks every minute and asks:
 // "Is anyone due for their digest right now?"
+//
+// KEY CONCEPT: Concurrency Guard
+// What if processDigests takes longer than 1 minute (slow DB,
+// many users, SendGrid timeout)? The next cron tick would start
+// a second run while the first is still going — potentially
+// sending duplicate emails. The `isRunning` flag prevents this:
+// if a run is still in progress, we skip that tick.
 // ────────────────────────────────────────────────────────────
-cron.schedule("* * * * *", () => {
-  processDigests();
+let isRunning = false;
+
+cron.schedule("* * * * *", async () => {
+  if (isRunning) {
+    console.log("[Scheduler] Previous run still in progress, skipping");
+    return;
+  }
+  isRunning = true;
+  try {
+    await processDigests();
+  } catch (err) {
+    console.error("[Worker] Unexpected error in processDigests:", err.message);
+  } finally {
+    isRunning = false;
+  }
 });
 
 // ────────────────────────────────────────────────────────────
@@ -98,7 +118,9 @@ cron.schedule("* * * * *", () => {
 // ────────────────────────────────────────────────────────────
 if (process.env.SEND_NOW === "true") {
   console.log("[Worker] SEND_NOW=true — running digest immediately");
-  processDigests();
+  processDigests().catch((err) => {
+    console.error("[Worker] SEND_NOW failed:", err.message);
+  });
 }
 
 // ────────────────────────────────────────────────────────────
