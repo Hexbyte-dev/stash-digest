@@ -21,9 +21,21 @@
 
 const sgMail = require("@sendgrid/mail");
 
-// Set the API key once — the SDK stores it internally and
-// uses it for all subsequent send() calls
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// API key is set lazily on first send (not at module load time)
+// so that env validation in worker.js runs first.
+let apiKeySet = false;
+
+/**
+ * Mask an email address for logging (PII protection).
+ * "casey@example.com" -> "ca***@example.com"
+ */
+function maskEmail(email) {
+  if (!email) return "[unknown]";
+  const [local, domain] = email.split("@");
+  if (!domain) return "***";
+  const visible = local.slice(0, 2);
+  return `${visible}***@${domain}`;
+}
 
 /**
  * Send a single email via SendGrid.
@@ -35,25 +47,41 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
  * @returns {boolean} true if sent successfully, false if failed
  */
 async function sendEmail({ to, subject, html }) {
+  // Set API key on first call (after env validation has run)
+  if (!apiKeySet) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    apiKeySet = true;
+  }
+
+  const frontendUrl = process.env.FRONTEND_URL || "https://aesthetic-jelly-e1e2f9.netlify.app";
+
   // Build the message object that SendGrid expects
   const msg = {
     to,
     from: process.env.SENDGRID_FROM_EMAIL,
     subject,
     html,
+    // List-Unsubscribe header improves deliverability and satisfies
+    // CAN-SPAM requirements. Gmail shows an unsubscribe link when
+    // this header is present, which reduces spam complaints.
+    headers: {
+      "List-Unsubscribe": `<${frontendUrl}/settings>`,
+    },
   };
+
+  const masked = maskEmail(to);
 
   try {
     // sgMail.send() returns a promise that resolves when SendGrid
     // accepts the email. Note: "accepted" doesn't mean "delivered" —
     // SendGrid queues it and handles actual delivery asynchronously.
     await sgMail.send(msg);
-    console.log(`[Email] Sent to ${to}: "${subject}"`);
+    console.log(`[Email] Sent to ${masked}: "${subject}"`);
     return true;
   } catch (err) {
     // Log the error but don't crash — the scheduler will continue
     // processing other users even if one email fails
-    console.error(`[Email] Failed to send to ${to}:`, err.message);
+    console.error(`[Email] Failed to send to ${masked}:`, err.message);
 
     // SendGrid errors often include a response body with details
     // (e.g., "invalid API key", "sender not verified", etc.)

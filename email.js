@@ -45,6 +45,9 @@ function timeAgo(date) {
   const then = new Date(date);
   const diffMs = now - then;
 
+  // Guard against future dates (clock skew or bad data)
+  if (diffMs < 0) return "just now";
+
   // Convert milliseconds to various units
   const minutes = Math.floor(diffMs / (1000 * 60));
   const hours = Math.floor(diffMs / (1000 * 60 * 60));

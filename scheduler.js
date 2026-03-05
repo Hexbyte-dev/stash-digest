@@ -47,6 +47,16 @@ async function processDigests() {
     // If nobody is due, exit quietly (this will happen most minutes)
     if (dueUsers.length === 0) return;
 
+    // Safety cap: if the query returns a huge number of users due to
+    // a bug or data issue, don't try to send thousands of emails in
+    // one run. Process at most 50 per tick; the rest will be picked
+    // up on the next minute's tick.
+    const MAX_PER_RUN = 50;
+    if (dueUsers.length > MAX_PER_RUN) {
+      console.warn(`[Scheduler] ${dueUsers.length} users due, capping at ${MAX_PER_RUN}`);
+      dueUsers.splice(MAX_PER_RUN);
+    }
+
     console.log(`[Scheduler] ${dueUsers.length} user(s) due for digest`);
 
     // Step 2: Process each due user one at a time
@@ -97,13 +107,13 @@ async function processDigests() {
         // we log the error but DON'T crash. The loop continues
         // processing other users. This is critical for reliability —
         // one bad record shouldn't block everyone else's email.
-        console.error(`[Scheduler] Error for user ${user.user_id}:`, err.message);
+        console.error(`[Scheduler] Error for user ${user.user_id}:`, err);
       }
     }
   } catch (err) {
     // This catches errors in getUsersDueForDigest itself
     // (e.g., database connection lost)
-    console.error("[Scheduler] Error checking due users:", err.message);
+    console.error("[Scheduler] Error checking due users:", err);
   }
 }
 
