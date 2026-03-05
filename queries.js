@@ -60,6 +60,7 @@ async function getUsersDueForDigest() {
         us.digest_frequency = 'daily'
         OR EXTRACT(ISODOW FROM NOW() AT TIME ZONE us.timezone) = 1
       )
+      AND u.email_verified = true
   `);
   return result.rows;
 }
