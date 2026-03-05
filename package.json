@@ -1,0 +1,19 @@
+{
+  "name": "stash-digest",
+  "version": "1.0.0",
+  "description": "Email digest worker for Stash — sends daily/weekly summary emails via SendGrid",
+  "main": "worker.js",
+  "scripts": {
+    "start": "node worker.js",
+    "dev": "node --watch worker.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@sendgrid/mail": "^8.1.0",
+    "dotenv": "^16.4.0",
+    "node-cron": "^3.0.0",
+    "pg": "^8.19.0"
+  }
+}
