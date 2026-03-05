@@ -55,6 +55,11 @@ async function getUsersDueForDigest() {
         us.last_digest_sent IS NULL
         OR (us.last_digest_sent AT TIME ZONE us.timezone)::date < (NOW() AT TIME ZONE us.timezone)::date
       )
+      -- Minimum 20-hour cooldown prevents timezone-manipulation abuse
+      AND (
+        us.last_digest_sent IS NULL
+        OR us.last_digest_sent < NOW() - INTERVAL '20 hours'
+      )
       -- Weekly digests only send on Monday (1 = Monday in PostgreSQL)
       AND (
         us.digest_frequency = 'daily'
